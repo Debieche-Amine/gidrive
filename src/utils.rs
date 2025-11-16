@@ -57,3 +57,33 @@ pub fn human_size(bytes: u64) -> String {
         format!("{:.2} TB", b / TB)
     }
 }
+
+pub fn versions_are_compatible(found: &str, current: &str) -> bool {
+    let found_parts: Vec<&str> = found.split('.').collect();
+    let current_parts: Vec<&str> = current.split('.').collect();
+
+    if found_parts.len() != 3 || current_parts.len() != 3 {
+        return false;
+    }
+
+    let Ok(found_maj) = found_parts[0].parse::<u32>() else {
+        return false;
+    };
+    let Ok(found_min) = found_parts[1].parse::<u32>() else {
+        return false;
+    };
+    let Ok(curr_maj) = current_parts[0].parse::<u32>() else {
+        return false;
+    };
+    let Ok(curr_min) = current_parts[1].parse::<u32>() else {
+        return false;
+    };
+
+    if found_maj != curr_maj {
+        return false;
+    }
+    if curr_maj == 0 && found_min != curr_min {
+        return false;
+    }
+    true
+}

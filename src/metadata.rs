@@ -3,7 +3,7 @@ use serde_json;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::constants::{MAX_SIZE_PER_REPO, TMPFS_DIR};
+use crate::constants::{MAX_SIZE_PER_REPO, TMPFS_DIR, VERSION};
 use crate::git::{create_repo, repo_exists};
 use crate::models::{RepoInfo, ReposMetadata};
 
@@ -14,7 +14,9 @@ pub fn get_metadata_dir() -> PathBuf {
 pub fn load_repos_metadata(metadata_clone_dir: &Path) -> Result<ReposMetadata> {
     let path = metadata_clone_dir.join("repos.json");
     if path.exists() {
-        let data = std::fs::read_to_string(&path).context("Failed to read repos.json")?;
+        let data = std::fs::read_to_string(&path).context(
+            "Failed to read repos.json, uncompatible versions? repos.json modified manually?",
+        )?;
         serde_json::from_str(&data).context("Failed to parse repos.json")
     } else {
         Ok(ReposMetadata {
@@ -29,6 +31,22 @@ pub fn save_repos_metadata(metadata_clone_dir: &Path, repos_meta: &ReposMetadata
     let data =
         serde_json::to_string_pretty(repos_meta).context("Failed to serialize repos.json")?;
     std::fs::write(&path, data).context("Failed to write repos.json")
+}
+
+pub fn load_version(metadata_clone_dir: &Path) -> Result<String> {
+    let path = metadata_clone_dir.join("version.txt");
+    if path.exists() {
+        let data = std::fs::read_to_string(&path).context("Failed to read version.txt")?;
+        Ok(data.trim().to_string())
+    } else {
+        save_version(metadata_clone_dir, VERSION)?;
+        Ok(VERSION.to_string())
+    }
+}
+
+pub fn save_version(metadata_clone_dir: &Path, version: &str) -> Result<()> {
+    let path = metadata_clone_dir.join("version.txt");
+    std::fs::write(&path, version).context("Failed to write version.txt")
 }
 
 pub fn find_or_create_repo_for_chunk(

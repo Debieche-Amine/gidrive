@@ -9,15 +9,20 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::chunks::{download_chunks_from_repo, upload_chunks_to_repo};
-use crate::constants::{CHUNK_SIZE, METADATA_REPO_URL, NUM_PUSH_THREADS, SSH_KEY_PATH, TMPFS_DIR};
-use crate::git::{clone_repo, create_repo, git_add_commit_push, repo_exists, ssh_agent};
+use crate::constants::{
+    CHUNK_SIZE, METADATA_REPO_URL, NUM_PUSH_THREADS, SSH_KEY_PATH, TMPFS_DIR, VERSION,
+};
+use crate::git::{
+    clone_repo, create_repo, delete_repo, git_add_commit_push, list_repos, repo_exists, ssh_agent,
+};
 use crate::metadata::{
-    find_or_create_repo_for_chunk, get_metadata_dir, load_repos_metadata, save_repos_metadata,
+    find_or_create_repo_for_chunk, get_metadata_dir, load_repos_metadata, load_version,
+    save_repos_metadata,
 };
 use crate::models::{ChunkInfo, FileMetadata, ReposMetadata};
-use crate::utils::{ensure_tmpfs_dir, get_file_sha256, human_size};
+use crate::utils::{ensure_tmpfs_dir, get_file_sha256, human_size, versions_are_compatible};
 
-pub fn upload_file(remote: &str, local: &str) -> Result<()> {
+pub fn upload(remote: &str, local: &str) -> Result<()> {
     ensure_tmpfs_dir()?;
     let local_path = Path::new(local);
     let checksum = get_file_sha256(local_path)?;
@@ -28,7 +33,22 @@ pub fn upload_file(remote: &str, local: &str) -> Result<()> {
         fs::remove_dir_all(&metadata_clone_dir)?;
     }
     clone_repo(METADATA_REPO_URL, &metadata_clone_dir)?;
+
+    // check if current version and remote version are compatable
+    let version = load_version(&metadata_clone_dir)?;
+    if versions_are_compatible(&version, VERSION) {
+        println!(
+            "rejected: Incompatible version: current {}, found {}, you can only perform read operations",
+            VERSION, version
+    );
+    } else {
+        panic!(
+            "upload rejected: Incompatible version: current {}, found {}, you can only perform read operations",
+            VERSION, version
+        );
+    }
     let mut repos_meta = load_repos_metadata(&metadata_clone_dir)?;
+
     // Pre-assign repos for all chunks (sequential)
     let mut assignments: Vec<(usize, String, u64)> = Vec::new();
     let mut remaining = file_size;
@@ -122,7 +142,7 @@ pub fn upload_file(remote: &str, local: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn download_file(remote: &str, local: &str) -> Result<()> {
+pub fn download(remote: &str, local: &str) -> Result<()> {
     ensure_tmpfs_dir()?;
     let metadata_clone_dir = get_metadata_dir();
     if metadata_clone_dir.exists() {
@@ -227,7 +247,7 @@ pub fn init() -> Result<()> {
     Ok(())
 }
 
-pub fn list_metadata() -> Result<()> {
+pub fn ls() -> Result<()> {
     ensure_tmpfs_dir()?;
     let metadata_clone_dir = get_metadata_dir();
     if metadata_clone_dir.exists() {
@@ -255,5 +275,14 @@ pub fn list_metadata() -> Result<()> {
         }
     }
     fs::remove_dir_all(&metadata_clone_dir)?;
+    Ok(())
+}
+
+pub fn clean() -> Result<()> {
+    let repos = list_repos()?;
+    for repo in repos {
+        println!("deleting repo:{}", &repo);
+        delete_repo(&repo)?;
+    }
     Ok(())
 }

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use serde_json::Value;
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
@@ -19,6 +20,23 @@ pub fn delete_repo(repo_name: &str) -> Result<()> {
     let cmd = format!("gh repo delete {}/{} --yes", GITHUB_USERNAME, repo_name);
     run(&cmd)?;
     Ok(())
+}
+
+pub fn list_repos() -> Result<Vec<String>> {
+    let output = run(&format!(
+        "gh repo list {} --json name --limit 1000000",
+        GITHUB_USERNAME
+    ))?;
+
+    let names: Vec<String> = serde_json::from_str::<Value>(&output)?
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|repo| repo["name"].as_str().unwrap().to_string())
+        .collect();
+
+    println!("{names:?}");
+    Ok(names)
 }
 
 pub fn repo_exists(repo_name: &str) -> bool {
@@ -47,7 +65,7 @@ pub fn git_add_commit_push(dir: &Path, msg: &str) -> Result<()> {
     let cmd_add = format!("cd {} && git add .", dir.display());
     run(&cmd_add).context("Failed to git add")?;
     let cmd_commit = format!("cd {} && git commit -m \"{}\"", dir.display(), msg);
-    run(&cmd_commit).context("Failed to git commit")?;
+    run(&cmd_commit).context("Failed to git commit");
     let cmd_push = format!("cd {} && git push origin main", dir.display());
     let mut backoff = 1u64;
     loop {
