@@ -504,8 +504,16 @@ pub fn list_metadata() -> Result<()> {
             if entry.file_type().is_file()
                 && entry.path().extension().map_or(false, |e| e == "json")
             {
+                let meta: FileMetadata = serde_json::from_reader(
+                    File::open(entry.path())
+                        .with_context(|| format!("reading metadata {:?}", entry.path()))?,
+                )?;
+
+                let human = human_size(meta.size);
+
                 if let Ok(rel_path) = entry.path().strip_prefix(&fs_dir) {
-                    println!("{}", rel_path.with_extension("").display());
+                    let without_ext = rel_path.with_extension("");
+                    println!("{}  {}", without_ext.display(), human);
                 }
             }
         }
@@ -513,4 +521,24 @@ pub fn list_metadata() -> Result<()> {
 
     fs::remove_dir_all(&metadata_clone_dir)?;
     Ok(())
+}
+
+fn human_size(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+    const TB: f64 = GB * 1024.0;
+
+    let b = bytes as f64;
+    if b < KB {
+        format!("{} B", bytes)
+    } else if b < MB {
+        format!("{:.2} KB", b / KB)
+    } else if b < GB {
+        format!("{:.2} MB", b / MB)
+    } else if b < TB {
+        format!("{:.2} GB", b / GB)
+    } else {
+        format!("{:.2} TB", b / TB)
+    }
 }
