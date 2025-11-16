@@ -7,6 +7,34 @@ use std::process::Command;
 
 use crate::constants::{CHUNK_SIZE, TMPFS_DIR};
 
+pub fn sleep(seconds: f64) {
+    if seconds <= 0.0 {
+        return; // no sleeping for zero or negative values
+    }
+    std::thread::sleep(std::time::Duration::from_secs_f64(seconds));
+}
+
+/// Retries a fallible operation indefinitely, with a configurable starting delay
+/// and delay increment per retry. If increment is 0, delay is fixed.
+pub fn retry<T, E, F>(mut operation: F, start_delay_secs: u64, delay_increment_secs: u64) -> T
+where
+    F: FnMut() -> Result<T, E>,
+    E: std::fmt::Debug,
+{
+    let mut delay = start_delay_secs;
+
+    loop {
+        match operation() {
+            Ok(val) => return val,
+            Err(e) => {
+                eprintln!("Operation failed: {:?}. Retrying in {}s...", e, delay);
+                sleep(delay as f64);
+                delay = delay.saturating_add(delay_increment_secs);
+            }
+        }
+    }
+}
+
 pub fn run(cmd: &str) -> io::Result<String> {
     let output = Command::new("sh").arg("-c").arg(cmd).output()?;
     io::stdout().write_all(&output.stdout)?;

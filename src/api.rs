@@ -20,7 +20,9 @@ use crate::metadata::{
     save_repos_metadata,
 };
 use crate::models::{ChunkInfo, FileMetadata, ReposMetadata};
-use crate::utils::{ensure_tmpfs_dir, get_file_sha256, human_size, versions_are_compatible};
+use crate::utils::{
+    ensure_tmpfs_dir, get_file_sha256, human_size, retry, sleep, versions_are_compatible,
+};
 
 pub fn upload(remote: &str, local: &str) -> Result<()> {
     ensure_tmpfs_dir()?;
@@ -36,12 +38,7 @@ pub fn upload(remote: &str, local: &str) -> Result<()> {
 
     // check if current version and remote version are compatable
     let version = load_version(&metadata_clone_dir)?;
-    if versions_are_compatible(&version, VERSION) {
-        println!(
-            "rejected: Incompatible version: current {}, found {}, you can only perform read operations",
-            VERSION, version
-    );
-    } else {
+    if !versions_are_compatible(&version, VERSION) {
         panic!(
             "upload rejected: Incompatible version: current {}, found {}, you can only perform read operations",
             VERSION, version
@@ -55,7 +52,12 @@ pub fn upload(remote: &str, local: &str) -> Result<()> {
     let mut index = 0;
     while remaining > 0 {
         let chunk_size = remaining.min(CHUNK_SIZE as u64);
-        let repo_name = find_or_create_repo_for_chunk(&mut repos_meta, chunk_size)?;
+        let repo_name = retry(
+            || find_or_create_repo_for_chunk(&mut repos_meta, chunk_size),
+            3,  // start delay 1 second
+            10, // add 1 second each retry; use 0 if you want fixed delay
+        );
+        sleep(1.3);
         assignments.push((index, repo_name, chunk_size));
         remaining -= chunk_size;
         index += 1;

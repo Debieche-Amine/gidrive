@@ -1,6 +1,6 @@
 [package]
 name = "gidrive"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Debieche Amine <debieche_amine@proton.me>"]
 description = "A tool to use github as an infinite drive"
